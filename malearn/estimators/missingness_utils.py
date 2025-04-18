@@ -12,7 +12,7 @@ def patch_missingness_mask(estimator, M):
     try:
         yield estimator
     finally:
-        delattr(estimator, '_missingness_mask')
+        delattr(estimator, "_missingness_mask")
 
 
 def check_missingness_mask(M, X):
@@ -58,7 +58,6 @@ def get_ensemble_missingness_reliance_from_df(df, X, M, equality_left=True):
         I_na = I[is_missing]
         I_o = I[~is_missing]
 
-        # TODO: Double-check the thresholding logic
         left, right = children[node]
         if equality_left:
             I_l = I_o[X[I_o, fid] <= thresholds[node]]

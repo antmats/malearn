@@ -23,7 +23,7 @@ def seed_torch(seed):
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.backends.cudnn.benchmark = False
-        os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
+        os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
     torch.use_deterministic_algorithms(True)
 
 
@@ -115,6 +115,6 @@ def create_results_dir(
 
 def save_yaml(data, path, filename, **kwargs):
     Path(path).mkdir(parents=True, exist_ok=True)
-    path = os.path.join(path, filename + ".yaml")
+    path = os.path.join(path, filename + ".yml")
     with open(path, "w") as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False, **kwargs)

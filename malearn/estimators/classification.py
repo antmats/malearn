@@ -2,13 +2,12 @@ from abc import ABCMeta, abstractmethod
 from numbers import Integral, Real
 
 import torch
-#import fastsparsegams
 import pandas as pd
 import numpy as np
 from xgboost import XGBClassifier
 
 from skorch import NeuralNetClassifier
-from skorch.dataset import ValidSplit, unpack_data
+from skorch.dataset import ValidSplit
 from skorch.callbacks import (
     EpochTimer,
     PrintLog,
@@ -60,10 +59,9 @@ from .missingness_utils import (
     get_lm_missingness_reliance,
 )
 from .regression import MADTRegressor
-from .modules import SDT, UnidimensionalInnerNodes, NeuMissMLP, collate_fn
-from .tree import create_decision_stump, create_decision_tree
+from .modules import NeuMissMLP, collate_fn
 from .criterion import info_gain_scorer, gini_scorer, entropy, gini_impurity
-from ..utils import to_tensor, seed_torch
+from ..utils import seed_torch
 from .minty.minty import MintyClassifier
 
 CRITERIA_CLF = {"info_gain": info_gain_scorer, "gini": gini_scorer}
@@ -80,7 +78,6 @@ __all__ = [
     "MADTClassifier",
     "MARFClassifier",
     "MAGBTClassifier",
-    "MASDTClassifier",
 ]
 
 
@@ -195,39 +192,6 @@ def get_classifier(
             .set_score_request(M=True, sample_weight=True, metric=True)
         )
 
-    elif estimator_alias == "masdt":
-        return (
-            MASDTClassifier(
-                seed=seed,
-                module__input_dim=input_dim,
-                module__output_dim=output_dim,
-                module__prediction_mode="mean",
-                max_depth=3,
-                alpha=0.001,
-                beta=0.001,
-                criterion=torch.nn.CrossEntropyLoss,
-                optimizer=torch.optim.Adam,
-                optimizer__lr=0.001,
-                max_epochs=100,
-                batch_size=32,
-                iterator_train__shuffle=True,
-                train_split=ValidSplit(5),
-                callbacks=[
-                    EarlyStopping(patience=10),
-                    Checkpoint(
-                        f_optimizer=None,
-                        f_criterion=None,
-                        dirname=checkpoint_dir_path,
-                        load_best=True,
-                    ),
-                ],
-                verbose=1,
-                device=device,
-            )
-            .set_fit_request(M=True)
-            .set_score_request(M=True, sample_weight=True, metric=True)
-        )
-
     else:
         raise ValueError(f"Unknown estimator: {estimator_alias}.")
 
@@ -274,16 +238,21 @@ class MGAMClassifier(ClassifierMixin, BaseEstimator):
         labels = unique_labels(y)
         if not len(labels) == 2:
             raise ValueError("M-GAM supports only binary classification.")
-        self.model_ = fastsparsegams.fit(
-            X,
-            y,
-            lambda_grid=[[self.lambda_0]],
-            loss="Exponential",
-            algorithm="CDPSI",
-            num_lambda=None,
-            num_gamma=None,
-            max_support_size=self.max_support_size,
-        )
+        try:
+            import fastsparsegams
+        except ImportError:
+            raise ModuleNotFoundError("fastsparsegams is not installed.")
+        else:
+            self.model_ = fastsparsegams.fit(
+                X,
+                y,
+                lambda_grid=[[self.lambda_0]],
+                loss="Exponential",
+                algorithm="CDPSI",
+                num_lambda=None,
+                num_gamma=None,
+                max_support_size=self.max_support_size,
+            )
         self.classes_ = labels
         self.n_classes_ = len(labels)
 
@@ -830,7 +799,7 @@ class BaseMAGBT(BaseGradientBoosting, metaclass=ABCMeta):
         else:
             neg_g_view = neg_gradient
 
-        M = getattr(self, '_missingness_mask', None)
+        M = getattr(self, "_missingness_mask", None)
 
         for k in range(self.n_trees_per_iteration_):
             if self._loss.is_multiclass:
@@ -954,98 +923,3 @@ class MAGBTClassifier(ClassifierMixin, BaseMAGBT, GradientBoostingClassifier):
     def compute_missingness_reliance(self, X, M):
         check_is_fitted(self)
         return get_ensemble_missingness_reliance(self, X, M)
-
-
-# =============================================================================
-# == Missingness-avoiding soft decision tree classifier =======================
-# =============================================================================
-
-class MASDTClassifier(NNClassifier):
-    """Missingness-avoiding soft decision tree classifier."""
-
-    def __init__(self, *, max_depth=5, alpha=0.001, beta=0.001, **kwargs):
-        kwargs.pop("module", None)
-        super().__init__(module=SDT, **kwargs)
-        self.max_depth = max_depth
-        self.alpha = alpha  # Missingness penalty weight
-        self.beta = beta  # Splitting penalty weight
-
-    def infer(self, x, **fit_params):
-        x = to_tensor(x, dtype=torch.float32, device=self.device)
-        return super().infer(x, **fit_params)
-
-    def initialize_module(self):
-        kwargs = self.get_params_for("module")
-        if getattr(self, "tree_", False):
-            kwargs["tree"] = self.tree_
-        else:
-            # Use a decision stump as a default tree to avoid errors when
-            # initializing the optimizer.
-            kwargs["tree"] = create_decision_stump()
-        module = self.initialized_instance(self.module, kwargs)
-        self.module_ = module
-        return self
-
-    def get_loss(self, y_pred, y_true, X=None, training=False):
-        logits = y_pred["predictions"][0]
-        y_true = to_tensor(y_true, device=self.device)
-        loss = self.criterion_(logits, y_true)
-        splitting_penalty, missingness_penalty = y_pred["penalties"]
-        loss += self.beta * splitting_penalty + self.alpha * missingness_penalty
-        return loss
-
-    # Catch the fit parameters here to avoid passing them to
-    # `self.get_split_datasets`.
-    def get_split_datasets(self, X, y=None, **fit_params):
-        return super().get_split_datasets(X, y)
-
-    def fit(self, X, y, M=None):
-        if self.warm_start:
-            raise ValueError("Warm start is not supported.")
-        self.tree_ = create_decision_tree(self.max_depth)
-        return super().fit(X, y) if M is None else super().fit(dict(X=X, M=M), y)
-
-    def evaluation_step(self, batch, training=False):
-        self.check_is_fitted()
-        Xi, _ = unpack_data(batch)
-        with torch.set_grad_enabled(training):
-            self._set_training(training)
-            y_pred = self.infer(Xi)
-            return (
-                y_pred["predictions"][0],  # Logits
-                y_pred["probas"][1],  # All path probabilities
-            )
-
-    def on_batch_end(self, net, batch=None, training=False, **kwargs):
-        prefix = 'train_' if training else 'valid_'
-        penalties = ["splitting_penalty", "missingness_penalty"]
-        penalty_dict = dict(zip(penalties, kwargs["y_pred"]["penalties"]))
-        for k, v in penalty_dict.items():
-            self.history.record_batch(prefix + k, v.item())
-
-    def discretize(self):
-        self.module_.discretize()
-        return self
-
-    def compute_missingness_reliance(self, X, M):
-        if not isinstance(self.module_.inner_nodes, UnidimensionalInnerNodes):
-            self.discretize()
-
-        _logits, path_probas = self.forward(X, training=False)
-
-        # Exclude the leaf nodes.
-        n_leaf_nodes = len(self.module_.tree.leaf_nodes)
-        path_probas = path_probas[:, :-n_leaf_nodes]
-        path_probas = path_probas.cpu().numpy()
-
-        # Get the index of the largest weight for each inner node. This index
-        # corresponds to the feature that the inner node splits on.
-        weights = self.module_.inner_nodes.weight[:, 1:]  # Exclude biases
-        _, split_indices = torch.max(weights, dim=1)
-        split_indices = split_indices.cpu().numpy()
-
-        M_split_features = M[:, split_indices]
-        traversed_missing = (path_probas == 1) & (M_split_features == 1)
-
-        miss_reliance_per_input = traversed_missing.any(axis=1)
-        return miss_reliance_per_input.mean()

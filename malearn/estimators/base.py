@@ -27,7 +27,6 @@ from .tree import (
 from .missingness_utils import (
     check_missingness_mask,
     get_lm_missingness_reliance,
-    get_dt_missingness_reliance,
 )
 
 
@@ -468,12 +467,6 @@ class BaseMADT(BaseEstimator, metaclass=ABCMeta):
                 continue
             for feature in self._get_features_along_decision_path(x, max_depth):
                 miss_reliance[i, feature] = m[feature]
-        if hasattr(self, "tree_"):
-            # Check that the computation of missingness reliance is consistent
-            # across methods. TODO: Remove this later.
-            rho1 = np.mean(np.max(miss_reliance, axis=1))
-            rho2 = get_dt_missingness_reliance(self, X, M)
-            assert np.isclose(rho1, rho2)
         if reduce:
             return np.mean(np.max(miss_reliance, axis=1))
         else:

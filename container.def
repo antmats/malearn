@@ -3,7 +3,7 @@ Bootstrap: docker
 From: continuumio/miniconda3:latest
 
 %post
-    project_name="malearn"
+    project_name=malearn
 
     # Install software.
     apt-get update
@@ -24,15 +24,7 @@ From: continuumio/miniconda3:latest
     # Install the project and its dependencies.
     rsync -r "/mnt/${project_name}" .
     cd "$project_name"
-    pixi install -e cuda
+    CONDA_OVERRIDE_CUDA=12.1 pixi install -e cuda
 
     # Activate the environment upon running the container.
-    echo "$(pixi shell-hook -e cuda)" >> $SINGULARITY_ENVIRONMENT
-
-%environment
-    project_name="malearn"
-
-    if [ -d "/mnt/${project_name}" ]
-    then
-        export PYTHONPATH="/mnt/${project_name}:${PYTHONPATH}"
-    fi
+    echo "$(CONDA_OVERRIDE_CUDA=12.1 pixi shell-hook -e cuda)" >> $SINGULARITY_ENVIRONMENT

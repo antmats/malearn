@@ -7,7 +7,6 @@ from sklearn.pipeline import _transform_one
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.exceptions import NotFittedError
 from sklearn.base import BaseEstimator, _fit_context
-from sklearn.utils._encode import _check_unknown, _encode
 from sklearn.utils._missing import is_scalar_nan
 
 

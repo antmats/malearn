@@ -2,11 +2,9 @@ import os
 import re
 import warnings
 import glob
-import copy
 from numbers import Integral
 from os.path import join, basename
 from collections.abc import Iterable
-from collections import defaultdict
 from functools import partial
 
 import joblib
@@ -16,7 +14,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from seaborn._statistics import EstimateAggregator
 
-from sklearn.metrics import accuracy_score, roc_auc_score, r2_score
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor, _criterion
 from sklearn.utils.validation import check_is_fitted
 from sklearn.utils._param_validation import validate_params, Interval, StrOptions
@@ -25,8 +22,6 @@ from sklearn.tree._reingold_tilford import Tree
 from sklearn.base import is_classifier
 
 from .estimators import MADTClassifier, MADTRegressor
-from .utils import load_config
-from .data import get_data_handler
 
 
 class TreeExporter(_MPLTreeExporter):
@@ -265,7 +260,7 @@ def plot_tree(
             if l in label_mapper:
                 l = label_mapper[l]
             elif re.match(r".*?\s*<=\s*-?\w+", l):
-                l1, l2 = l.split(' <= ')
+                l1, l2 = l.split(" <= ")
                 l2 = float(l2)
                 if inverse_transformer is not None:
                     try:
@@ -536,67 +531,6 @@ def get_results_table(
     table = combine_scoring_tables(all_scores, metrics, **kwargs)
 
     return table, all_scores
-
-
-def predict_stop_at_missing_feature_value(
-    experiment_dir,
-    metrics,
-    exclude_params=None,
-):
-    dataset_alias = os.path.basename(experiment_dir).split("_")[-1]
-
-    default_config = load_config(os.path.join(experiment_dir, "default_config.yml"))
-
-    madt_pipeline_list = collect_estimators(
-        experiment_dir, "madt", exclude_params=exclude_params,
-    )
-
-    if not madt_pipeline_list:
-        raise ValueError(f"No MADT estimators found in {experiment_dir}.")
-
-    out = defaultdict(list)
-
-    for madt_pipeline in madt_pipeline_list:
-        madt_preprocessor = madt_pipeline.named_steps["preprocessor"]
-        madt_estimator = madt_pipeline.named_steps["estimator"]
-
-        config = copy.deepcopy(default_config)
-        config["experiment"]["seed"] = madt_estimator.random_state
-        # This workaround is needed because the base_dir may not be correctly
-        # set in the default config.
-        config["base_dir"] = os.path.dirname(experiment_dir).removesuffix("/results")
-
-        data_handler = get_data_handler(config, dataset_alias)
-        _, _, _, X_test, y_test, M_test = data_handler.split_data()
-
-        Xt_test = madt_preprocessor.transform(X_test)
-
-        Mt_test = madt_pipeline._update_missingness_mask(
-            M_test, input_features=X_test.columns
-        )
-
-        out["seed"].append(madt_estimator.random_state)
-
-        for metric in metrics:
-            if metric == "accuracy":
-                yp_test = madt_estimator.predict(Xt_test, M=Mt_test)
-                score = accuracy_score(y_test, yp_test)
-            elif metric == "roc_auc_ovr":
-                yp_test = madt_estimator.predict(Xt_test, M=Mt_test, return_proba=True)
-                score = roc_auc_score(y_test, yp_test[:, 1])
-            elif metric == "r2_score":
-                yp_test = madt_estimator.predict(Xt_test, M=Mt_test)
-                score = r2_score(y_test, yp_test)
-            elif metric == "prediction_depth":
-                score = madt_estimator.get_prediction_depth(
-                    Xt_test, M=Mt_test
-                )
-            else:
-                raise ValueError(f"Unknown metric {metric}.")
-
-            out[metric].append(score)
-
-    return pd.DataFrame(out)
 
 
 def get_feature_names(preprocessor, categorical_feature_mapper={}):

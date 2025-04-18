@@ -5,13 +5,10 @@ hostname_var=$(hostname)
 if [[ $hostname_var == alvis* ]]; then
     account="NAISS2024-5-480"
     partition="alvis"
-    gpu="T4"
-    container="/mimer/NOBACKUP/groups/oovgen/malearn/containers/ma_env.sif"
     base_dir="/mimer/NOBACKUP/groups/oovgen/malearn"
 elif [[ $hostname_var == tetralith* ]]; then
     account="NAISS2024-22-285"
     partition="tetralith"
-    container="/proj/healthyai/malearn/containers/ma_env.sif"
     base_dir="/proj/healthyai/malearn"
 else
     echo "Unknown cluster."
@@ -139,16 +136,15 @@ for estimator in "$@"; do
     # determine if the estimator requires a GPU.
     if [ "$partition" == "tetralith" ]; then
         nodes="--nodes=1 --exclusive"
-        if [ "$estimator" == "masdt" ] || [ "$estimator" == "neumiss" ]; then
+        if [ "$estimator" == "neumiss" ]; then
             gpu_resources="--gpus-per-node=1"
         else
             gpu_resources=""
         fi
     elif [ "$partition" == "alvis" ]; then
         nodes="--nodes=1"
-        if [ "$estimator" == "masdt" ] || [ "$estimator" == "neumiss" ]; then
-            # TODO: Why does not using multiple GPUs per node work?
-            gpu_resources="--gpus-per-node=${gpu}:1"
+        if [ "$estimator" == "neumiss" ]; then
+            gpu_resources="--gpus-per-node=T4:1"
         else
             gpu_resources="--constraint=NOGPU"
         fi
@@ -165,5 +161,5 @@ for estimator in "$@"; do
         --time="1-0:0" \
         --array=$((trial_index + 1))-$((i - 1)) \
         --job-name="fit_${estimator}" \
-        "scripts/slurm/fit_estimator.sh" "$container" "$experiment_dir" "$dataset" "$estimator"
+        "scripts/slurm/fit_estimator.sh" "${base_dir}/containers/ma_env.sif" "$experiment_dir" "$dataset" "$estimator"
 done

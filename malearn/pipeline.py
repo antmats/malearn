@@ -83,8 +83,6 @@ class CustomPipeline(Pipeline):
             f = f.removesuffix("_" + f.split("_")[-1])
             if f in M.columns:
                 feature_names[i] = f
-        # TODO: Does it make sense to repeat the missingness indicator vector
-        # for each category of a categorical feature?
         M = [M[f].to_numpy() for f in feature_names]
         return np.array(M).T
 
