@@ -1,0 +1,160 @@
+experiment:
+  task_type: classification
+  missing_mechanism: mar  # mar or mnar
+  missing_features: 0
+  missing_rate: 0
+  imputation: zero
+  numerical_imputation: null
+  categorical_imputation: null
+  sample_size: null
+  seed: &seed 2024
+  test_size: 0.2
+  evaluation_metrics: [accuracy, roc_auc_ovr]
+
+base_dir: /PATH/TO/BASE/DIRECTORY
+# The following directories are relative to base_dir.
+cache_dir: cache
+results_dir: results
+data_dir: data
+
+model_selection:
+  search: random  # exhaustive or random
+  n_iter: 10  # Only used for randomized search
+  scoring: [roc_auc_ovr, missingness_reliance_score]
+  refit: tradeoff
+  gamma: 0.95
+  n_splits: 3
+  test_size: 0.2
+  seed: *seed
+
+estimators:
+  # The following fields may be specified for each estimator:
+  # - is_net_estimator : bool, default=False
+  #   Whether the estimator is a neural network.
+  # - use_missingness_mask : bool, default=False
+  #   Whether to pass the missingness mask to the estimator.
+  # - use_sample_weights : bool, default=False
+  #   Whether to pass sample weights to the estimator.
+  # - numerical_transformation : {"scale", "discretize", "none"}, default="scale"
+  #   The transformation to apply to numerical features.
+  # - categorical_transformation : {"onehot", "ordinal"}, default="onehot"
+  #   The transformation to apply to categorical features.
+  # - keep_nan : bool, default=False
+  #   Whether to keep NaN values in the data. If True, no imputation is
+  #   performed.
+  # - alpha : null or float
+  #   The missingess regularization parameter. If null, the estimator's
+  #   default value is used.
+  # - search : {"exhaustive", "random"}, default=model_selection.search
+  #   The search strategy to use for hyperparameter optimization.
+  # - include_ccp_alphas : bool, default=False
+  #   Whether to compute effective alphas to include in `hparams`.
+  # - hparams : dict
+  #   The hyperparameters to perform the hyperparameter search over.
+
+  # ===========================================================================
+  # == Missingness-avoiding estimators ========================================
+  # ===========================================================================
+
+  malasso:
+    use_missingness_mask: true
+    numerical_transformation: scale
+    alpha: null
+    search: exhaustive
+    hparams:
+      estimator__alpha: [1, 10, 100, 1000, 10000]
+      estimator__beta: [0.001, 0.01, 0.1, 1, 10, 100, 1000]
+
+  madt:
+    use_missingness_mask: true
+    numerical_transformation: scale
+    alpha: null
+    search: exhaustive
+    hparams:
+      estimator__max_depth: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+      estimator__alpha: [0.001, 0.01, 0.1, 1, 10]
+
+  marf:
+    use_missingness_mask: true
+    numerical_transformation: scale
+    alpha: null
+    search: random
+    hparams:
+      estimator__n_estimators: [50]
+      estimator__max_depth: [1, 2, 3, 4, 5, 6, 7]
+      estimator__alpha: [0.001, 0.01, 0.1, 1, 10]
+
+  magbt:
+    use_missingness_mask: true
+    numerical_transformation: scale
+    alpha: null
+    search: random
+    hparams:
+      estimator__n_estimators: [10]
+      estimator__loss: ["log_loss"]
+      estimator__learning_rate: [0.01, 0.1]
+      estimator__max_depth: [1, 2, 3, 4, 5, 6, 7]
+      estimator__alpha: [0.001, 0.01, 0.1, 1, 10, 100, 1000]
+
+  # ===========================================================================
+  # == Baseline estimators ====================================================
+  # ===========================================================================
+
+  lasso:
+    numerical_transformation: scale
+    search: exhaustive
+    hparams:
+      estimator__C: [0.1, 0.5, 1.0, 2.0, 10.0]
+
+  dt:
+    numerical_transformation: scale
+    search: exhaustive
+    hparams:
+      estimator__max_depth: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+  rf:
+    numerical_transformation: scale
+    search: exhaustive
+    hparams:
+      estimator__max_depth: [3, 4, 5, 6, 7, 8, 9]
+      estimator__min_samples_split: [0.05, 0.10, 0.15, 0.20, 0.25]
+
+  mgam:
+    search: exhaustive
+    hparams:
+      estimator__lambda_0: [
+        20, 10, 5, 2, 1, 0.5, 0.4, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005
+      ]
+
+  xgboost:
+    numerical_transformation: scale
+    keep_nan: true
+    search: random
+    hparams:
+      estimator__max_depth: [3, 4, 5, 6, 7, 8, 9]
+      estimator__learning_rate: [0.01, 0.1]
+      estimator__n_estimators: [100, 200, 300, 400, 500]
+
+  neumiss:
+    is_net_estimator: true
+    numerical_transformation: scale
+    keep_nan: true
+    search: exhaustive
+    hparams:
+      estimator__optimizer__lr: [0.001, 0.01, 0.1]
+      estimator__batch_size: [32, 64, 128]
+
+  minty:
+    numerical_transformation: discretize
+    keep_nan: true
+    search: random
+    hparams:
+      estimator__optimizer: [beam]
+      estimator__max_rules: [10, 15]
+      estimator__lambda_0: [1.0e-6, 1.0e-5, 0.001, 0.01, 0.1, 10]
+      estimator__lambda_1: [1.0e-6, 1.0e-5, 0.001, 0.01, 0.1, 10]
+      estimator__gamma: [0, 0.001, 0.01, 0.1, 10000]
+      estimator__reg_refit: [True]
+      estimator__reg_relaxed: [True]
+      estimator__optimality_tol: [1.0e-6]
+      estimator__feasibility_tol: [1.0e-6]

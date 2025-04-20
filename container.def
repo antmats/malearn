@@ -1,0 +1,30 @@
+Bootstrap: docker
+
+From: continuumio/miniconda3:latest
+
+%post
+    project_name=malearn
+
+    # Install software.
+    apt-get update
+    apt-get install -y curl
+    apt-get install -y rsync
+    curl -fsSL https://pixi.sh/install.sh | bash
+
+    # Install LaTeX.
+    apt-get install -y dvipng
+    apt-get install -y texlive-latex-extra
+    apt-get install -y texlive-fonts-recommended
+    apt-get install -y cm-super
+
+    # Restart the shell.
+    . ~/.profile
+    . ~/.bashrc
+
+    # Install the project and its dependencies.
+    rsync -r "/mnt/${project_name}" .
+    cd "$project_name"
+    CONDA_OVERRIDE_CUDA=12.1 pixi install -e cuda
+
+    # Activate the environment upon running the container.
+    echo "$(CONDA_OVERRIDE_CUDA=12.1 pixi shell-hook -e cuda)" >> $SINGULARITY_ENVIRONMENT
