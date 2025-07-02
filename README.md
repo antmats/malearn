@@ -2,7 +2,7 @@
 
 Handling missing values at test time is challenging for machine learning models, especially when aiming for both high accuracy and interpretability. Existing approaches often introduce bias through imputation or increase model complexity via missingness indicators. Moreover, both strategies can obscure interpretability, making it harder to understand how the model uses observed variables in its predictions. We propose __missingness-avoiding (MA) machine learning__, a general framework for training models that rarely require the values of missing (or imputed) features at test time. We develop tailored MA learning algorithms for decision trees, tree ensembles, and sparse linear models by incorporating classifier-specific regularization terms into their learning objectives.
 
-This repository contains the code used for the experiments presented in our paper _Prediction models that learn to avoid missing values_.
+This repository contains the code used for the experiments presented in our paper [_Prediction models that learn to avoid missing values_](https://icml.cc/virtual/2025/poster/43980), which was featured as a spotlight poster at ICML 2025.
 
 ## A motivating example
 
@@ -19,6 +19,8 @@ In the figure below (which can be reproduced by running the script  [`scripts/ru
 - [Datasets](#datasets)
 - [Experiments](#experiments)
 - [Tetralith setup](#tetralith-setup)
+- [Citation](#citation)
+- [Acknowledgements](#acknowledgements)
 
 ## Installation
 
@@ -184,3 +186,24 @@ ssh -N -L localhost:8889:localhost:8889 <username>@tetralith.nsc.liu.se
 ```
 
 3. Copy and paste the URL on Tetralith into your browser.
+
+## Citation
+
+If you use this work, please cite it as follows:
+```bib
+@inproceedings{
+  stempfle2025prediction,
+  title={Prediction models that learn to avoid missing values},
+  author={Lena Stempfle and Anton Matsson and Newton Mwai and Fredrik D. Johansson},
+  booktitle={Forty-second International Conference on Machine Learning},
+  year={2025},
+  url={https://openreview.net/forum?id=ps3aO9MHJv}
+}
+```
+
+## Acknowledgements
+
+This work was partially supported by the Wallenberg AI, Autonomous Systems and Software Program
+(WASP) funded by the Knut and Alice Wallenberg Foundation.
+
+The computations and data handling were enabled by resources provided by the National Academic Infrastructure for Supercomputing in Sweden (NAISS), partially funded by the Swedish Research Council through grant agreement no. 2022-06725.
